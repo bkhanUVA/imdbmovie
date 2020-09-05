@@ -5,6 +5,7 @@
 # Default output dir
 out_dir=imdbmovie/data
 
+
 while getopts o:mdr flag
 do
     case "${flag}" in
@@ -15,36 +16,24 @@ do
     esac
 done
 
+
+pull_data () {    
+
+    echo "------------------------------------------------------------"
+
+    if ! [ -z $1 ]
+    then
+        echo "STARTED: Pulling and unzipping ${2}"
+        curl https://datasets.imdbws.com/${3} | gzip -d > $out_dir/${2}.tsv
+    else
+        echo "WARNING: Skipping ${2} pull"
+    fi
+
+    echo "------------------------------------------------------------"
+}
+
+
 echo "WARNING: this script pulls and uzips several large files"
-
-echo "------------------------------------------------------------"
-
-if ! [ -z "$pull_movies" ]
-then
-    echo "STARTED: Pulling and unzipping movies"
-    curl https://datasets.imdbws.com/title.akas.tsv.gz | gzip -d > $out_dir/movies.tsv
-else
-    echo "WARNING: Skipping movie pull"
-fi
-
-echo "------------------------------------------------------------"
-
-if ! [ -z "$pull_meta" ]
-then
-    echo "STARTED: Pulling and unzipping movie metadata"
-    curl https://datasets.imdbws.com/title.basics.tsv.gz | gzip -d > $out_dir/movie_metadata.tsv
-else
-    echo "WARNING: Skipping movie metadata pull"
-fi
-
-echo "------------------------------------------------------------"
-
-if ! [ -z "$pull_rating" ]
-then
-    echo "STARTED: Pulling and unzipping movie user ratings"
-    curl https://datasets.imdbws.com/title.ratings.tsv.gz | gzip -d > $out_dir/title_ratings.tsv
-else
-    echo "WARNING: Skipping movie user ratings pull"
-fi
-
-echo "------------------------------------------------------------"
+pull_data "$pull_movies" "movies" "title.akas.tsv.gz"
+pull_data "$pull_meta" "movies_metadata" "title.basics.tsv.gz"
+pull_data "$pull_rating" "movies_ratings" "title.ratings.tsv.gz"
