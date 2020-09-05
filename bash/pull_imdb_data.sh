@@ -20,15 +20,14 @@ done
 
 
 pull_data () {    
-
     echo "------------------------------------------------------------"
 
     if ! [ -z $1 ]
     then
-        echo "STARTED: Pulling and unzipping ${2}"
+        echo "STATUS: Pulling and unzipping ${2}"
         curl $imdb_api/${3} | gzip -d > $out_dir/${2}.tsv
     else
-        echo "WARNING: Skipping ${2} pull"
+        echo "STATUS: Skipping ${2} pull"
     fi
 
     echo "------------------------------------------------------------"
