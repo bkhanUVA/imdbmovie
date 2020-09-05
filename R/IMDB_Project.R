@@ -13,10 +13,8 @@ library(ipred)
 library(ranger)
 library(scales)
 
-setwd("~/Downloads")
-
-#Import Data
-myMovies1 <- read.csv("ratings (3).csv", stringsAsFactors = FALSE)
+# Import Data
+myMovies1 <- read.csv("~/Desktop/ratings.csv", stringsAsFactors = FALSE)
 str(myMovies1)
 myMovies1 <- select(myMovies1, -URL)
 
@@ -41,7 +39,6 @@ sd(myMovies1$Your.Rating)
 
 
 #Making density and histogram plot of overall ratings
-
 ggplot(myMovies1, aes(x = Your.Rating)) +
   geom_histogram(bins = 10, fill = "yellow", col = "black") +
   theme_bw() + xlab("Rating") + ylab("Count") + ggtitle("My IMDb ratings") +
@@ -107,7 +104,7 @@ ggplot(DirectorTop, aes(x = Directors, y = Your.Rating, fill = Directors)) +
 
 
 #Larger dataset for machine learning, has multiple genre columns
-imdbLarge <- read.csv("imdb-top-14k.csv", stringsAsFactors = FALSE)
+imdbLarge <- read.csv("~/Desktop/geu/Other_Stuff/imdbmovie/data/imdb-top-14k.csv", stringsAsFactors = FALSE)
 colnames(imdbLarge)
 imdbLarge <- select(imdbLarge, c(-fn, -wordsInTitle, -url, -type, -nrOfWins:-nrOfGenre))
 str(imdbLarge)
