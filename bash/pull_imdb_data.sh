@@ -2,13 +2,15 @@
 
 # Sample Command to pull all data: ./pull_imdb_data.sh -o ~/Desktop -mdr
 
-# Default output dir
+# Defaults
 out_dir=imdbmovie/data
+imdb_api=https://datasets.imdbws.com
 
 
-while getopts o:mdr flag
+while getopts i:o:mdr flag
 do
     case "${flag}" in
+        i) imdb_api=${OPTARG};;
         o) out_dir=${OPTARG};;
         m) pull_movies=T;;
         d) pull_meta=T;;
@@ -24,7 +26,7 @@ pull_data () {
     if ! [ -z $1 ]
     then
         echo "STARTED: Pulling and unzipping ${2}"
-        curl https://datasets.imdbws.com/${3} | gzip -d > $out_dir/${2}.tsv
+        curl $imdb_api/${3} | gzip -d > $out_dir/${2}.tsv
     else
         echo "WARNING: Skipping ${2} pull"
     fi
