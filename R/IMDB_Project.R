@@ -1,3 +1,5 @@
+# By bkhanUVA - https://github.com/bkhanUVA
+
 library(ggplot2)
 library(dplyr)
 library(tm)
@@ -13,16 +15,19 @@ library(ipred)
 library(ranger)
 library(scales)
 
+#fix reads
+movie_ratings <- read.table(file = "~/Desktop/geu/Other_Stuff/imdbmovie/data/movies_ratings_sample.tsv", sep = '\t', header = TRUE)
+movie_metadata <- read.table(file = "~/Desktop/geu/Other_Stuff/imdbmovie/data/movies_metadata_sample.tsv", sep = '\t', header = TRUE, fill=TRUE)
+merged_movies <- inner_join(movie_ratings, movie_metadata, by = "tconst")
+
 # Import Data
 myMovies1 <- read.csv("~/Desktop/ratings.csv", stringsAsFactors = FALSE)
-str(myMovies1)
 myMovies1 <- select(myMovies1, -URL)
 
 #Make long by genres
 myMoviesLong <- myMovies1 %>% 
   mutate(Genres = strsplit(as.character(Genres), ",")) %>% 
   unnest(Genres)
-
 
 #MyRatings first moments and SD
 Mode <- function(x) {

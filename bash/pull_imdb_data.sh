@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# By bkhanUVA - https://github.com/bkhanUVA
+
 # Sample Command to pull all data: ./pull_imdb_data.sh -o ~/Desktop -mdr
 
 # Defaults
