@@ -15,19 +15,53 @@ library(ipred)
 library(ranger)
 library(scales)
 
-#fix reads
-movie_ratings <- read.table(file = "~/Desktop/geu/Other_Stuff/imdbmovie/data/movies_ratings_sample.tsv", sep = '\t', header = TRUE)
-movie_metadata <- read.table(file = "~/Desktop/geu/Other_Stuff/imdbmovie/data/movies_metadata_sample.tsv", sep = '\t', header = TRUE, fill=TRUE)
-merged_movies <- inner_join(movie_ratings, movie_metadata, by = "tconst")
+# Custom Vars for import
+imdb_ratings_file_name <- "movies_ratings_sample.tsv"
+imdb_metadata_file_name <- "movies_metadata_sample.tsv"
+imdb_input_dir <- "~/Desktop/geu/Other_Stuff/imdbmovie/data"
+user_ratings_input_dir <- "~/Desktop/geu/Other_Stuff/imdbmovie/data"
+user_ratings_input_file_name <- "individual_user_ratings_sample.csv"
 
-# Import Data
-myMovies1 <- read.csv("~/Desktop/ratings.csv", stringsAsFactors = FALSE)
-myMovies1 <- select(myMovies1, -URL)
+# Utilities
+import_tsv_util <- function(path, file_name, delim) {
+  imported_data <- read.delim(
+    file=paste(path, file_name, sep="/"),
+    sep=delim, fileEncoding='UTF-8', 
+    header=TRUE, fill=TRUE, stringsAsFactors = FALSE
+  )
+  return(imported_data)
+}
 
-#Make long by genres
-myMoviesLong <- myMovies1 %>% 
-  mutate(Genres = strsplit(as.character(Genres), ",")) %>% 
-  unnest(Genres)
+transform_input_metadata <- function(ratings_df) {
+  ratings_long_df <- ratings_df %>% 
+    mutate(Genres = strsplit(as.character(genres), ",")) %>% 
+    unnest(Genres)
+}
+
+# Import Logic
+read_imdb_input <- function() {
+  # Read movie ratings and metadata downloaded from IMDB by pull_imdb_data.sh
+  movie_ratings_df <- import_tsv_util(
+    imdb_input_dir, imdb_ratings_file_name, "\t"
+  )
+  movie_metadata_df <- import_tsv_util(
+    imdb_input_dir, imdb_metadata_file_name, "\t"
+  )
+  merged_imdb_movie_metadata_df <- inner_join(
+    movie_ratings_df, movie_metadata_df, by = "tconst"
+  )
+  return(merged_imdb_movie_metadata_df)
+}
+
+read_user_ratings_input <- function() {
+  # Read personal ratings user downloaded from their IMDB profile
+  user_movie_ratings_df <- read.csv(
+    paste(user_ratings_input_dir, user_ratings_input_file_name, sep='/'),
+    stringsAsFactors = FALSE
+  )
+  return(user_movie_ratings_df)
+}
+
 
 #MyRatings first moments and SD
 Mode <- function(x) {
@@ -363,3 +397,11 @@ imdb_large_rand %>%
   scale_y_continuous(labels = comma) +
   scale_x_continuous(breaks = year_breaks) +
   theme_bw()
+
+main <- function() {
+  merged_imdb_movie_metadata_df <- read_imdb_input()
+  user_movie_ratings_df <- read_user_ratings_input()
+  return(list(merged_imdb_movie_metadata_df, user_movie_ratings_df))
+}
+
+x = main()
