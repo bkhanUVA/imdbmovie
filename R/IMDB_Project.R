@@ -32,10 +32,17 @@ import_tsv_util <- function(path, file_name, delim) {
   return(imported_data)
 }
 
-transform_input_metadata <- function(ratings_df) {
+transform_df_genres <- function(ratings_df) {
+  # Take comma delimited GENRES column & create one row for each genre
   ratings_long_df <- ratings_df %>% 
-    mutate(Genres = strsplit(as.character(genres), ",")) %>% 
-    unnest(Genres)
+    mutate(GENRES = strsplit(as.character(GENRES), ",")) %>% 
+    unnest(GENRES)
+  return(ratings_long_df)
+}
+
+Mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))] 
 }
 
 # Import Logic
@@ -50,6 +57,9 @@ read_imdb_input <- function() {
   merged_imdb_movie_metadata_df <- inner_join(
     movie_ratings_df, movie_metadata_df, by = "tconst"
   )
+  names(merged_imdb_movie_metadata_df) <- toupper(
+    names(merged_imdb_movie_metadata_df)
+  )
   return(merged_imdb_movie_metadata_df)
 }
 
@@ -59,24 +69,29 @@ read_user_ratings_input <- function() {
     paste(user_ratings_input_dir, user_ratings_input_file_name, sep='/'),
     stringsAsFactors = FALSE
   )
+  names(user_movie_ratings_df) <- toupper(names(user_movie_ratings_df))
   return(user_movie_ratings_df)
 }
 
 
-#MyRatings first moments and SD
-Mode <- function(x) {
-  ux <- unique(x)
-  ux[which.max(tabulate(match(x, ux)))] 
-  }
+# Interesting statistics
+calculate_basic_statistics <- function(
+  merged_imdb_movie_metadata_df, user_movie_ratings_df
+) {
+  stats_list = list(
+    mode = Mode(user_movie_ratings_df$YOUR.RATING),
+    median = median(user_movie_ratings_df$YOUR.RATING),
+    mean = mean(user_movie_ratings_df$YOUR.RATING),
+    standard_dev = sd(user_movie_ratings_df$YOUR.RATING),
+    user_rating_vs_avg_rating = (
+      mean(merged_imdb_movie_metadata_df$AVERAGERATING) - 
+      mean(user_movie_ratings_df$YOUR.RATING)
+    )
+  )
+  return(stats_list)
+}
 
-Mode(myMovies1$Your.Rating)
-median(myMovies1$Your.Rating)
-mean(myMovies1$Your.Rating)
-sd(myMovies1$Your.Rating)
-
-(mean(myMovies1$IMDb.Rating) - mean(myMovies1$Your.Rating))
-
-
+#Plots 
 #Making density and histogram plot of overall ratings
 ggplot(myMovies1, aes(x = Your.Rating)) +
   geom_histogram(bins = 10, fill = "yellow", col = "black") +
@@ -401,6 +416,9 @@ imdb_large_rand %>%
 main <- function() {
   merged_imdb_movie_metadata_df <- read_imdb_input()
   user_movie_ratings_df <- read_user_ratings_input()
+  stats_list <- calculate_basic_statistics(merged_imdb_movie_metadata_df, 
+                                           user_movie_ratings_df)
+  print(stats_list)
   return(list(merged_imdb_movie_metadata_df, user_movie_ratings_df))
 }
 
