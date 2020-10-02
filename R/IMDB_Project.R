@@ -32,13 +32,41 @@ import_tsv_util <- function(path, file_name, delim) {
   return(imported_data)
 }
 
-transform_df_genres <- function(ratings_df) {
+transform_df_genres <- function(ratings_df, to_rows=TRUE) {
   # Take comma delimited GENRES column & create one row for each genre
-  ratings_long_df <- ratings_df %>% 
-    mutate(GENRES = strsplit(as.character(GENRES), ",")) %>% 
-    unnest(GENRES)
-  return(ratings_long_df)
+  if (to_rows==TRUE) {
+    ratings_long_df <- ratings_df %>% 
+      mutate(GENRES = strsplit(as.character(GENRES), ",")) %>% 
+      unnest(GENRES)
+    return(ratings_long_df)
+  } else {
+    ratings_df$GENRES <- toupper(ratings_df$GENRES)
+    distinct_genres_dirty <- distinct(ratings_df, GENRES) %>%
+      pull(GENRES)
+    distinct_genres <- paste(unlist(distinct_genres_dirty), collapse=',')
+    distinct_genres <- unlist(strsplit(distinct_genres, ',')) %>%
+      unique()
+    
+    ratings_wide_df <- ratings_df
+    for(genre in distinct_genres) {
+      #ratings_df[genre] <- genre %in% ratings_df[GENRES]
+      ratings_wide_df <- extract(
+        ratings_wide_df, GENRES, genre, 
+        regex=paste0('(',genre,')'), remove=FALSE
+      )
+    }
+    
+    genres_subset <- select(ratings_wide_df, distinct_genres)
+    genres_subset[!is.na(genres_subset)] <- 1
+    genres_subset[is.na(genres_subset)] <- 0
+    ratings_wide_df <- select(ratings_wide_df, -distinct_genres)
+    ratings_wide_df <- cbind(ratings_wide_df, genres_subset)
+    
+    return(ratings_wide_df)
+  }
 }
+
+abc <- transform_df_genres(x[[1]], to_rows=FALSE)
 
 Mode <- function(x) {
   ux <- unique(x)
@@ -72,7 +100,6 @@ read_user_ratings_input <- function() {
   names(user_movie_ratings_df) <- toupper(names(user_movie_ratings_df))
   return(user_movie_ratings_df)
 }
-
 
 # Interesting statistics
 calculate_basic_statistics <- function(
