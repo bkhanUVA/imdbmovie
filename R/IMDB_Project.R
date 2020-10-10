@@ -66,8 +66,6 @@ transform_df_genres <- function(ratings_df, to_rows=TRUE) {
   }
 }
 
-abc <- transform_df_genres(x[[1]], to_rows=FALSE)
-
 Mode <- function(x) {
   ux <- unique(x)
   ux[which.max(tabulate(match(x, ux)))] 
@@ -108,62 +106,65 @@ calculate_basic_statistics <- function(
   stats_list = list(
     mode = Mode(user_movie_ratings_df$YOUR.RATING),
     median = median(user_movie_ratings_df$YOUR.RATING),
-    mean = mean(user_movie_ratings_df$YOUR.RATING),
-    standard_dev = sd(user_movie_ratings_df$YOUR.RATING),
-    user_rating_vs_avg_rating = (
-      mean(merged_imdb_movie_metadata_df$AVERAGERATING) - 
-      mean(user_movie_ratings_df$YOUR.RATING)
-    )
+    user_mean = round(mean(user_movie_ratings_df$YOUR.RATING), 2),
+    imdb_mean = round(mean(merged_imdb_movie_metadata_df$AVERAGERATING), 2),
+    standard_dev = sd(user_movie_ratings_df$YOUR.RATING)
+  )
+  stats_list['user_rating_vs_avg_rating'] = (
+    stats_list$imdb_mean - stats_list$user_mean
   )
   return(stats_list)
 }
 
 #Plots 
 #Making density and histogram plot of overall ratings
-ggplot(myMovies1, aes(x = Your.Rating)) +
-  geom_histogram(bins = 10, fill = "yellow", col = "black") +
-  theme_bw() + xlab("Rating") + ylab("Count") + ggtitle("My IMDb ratings") +
-  scale_x_continuous(
-    breaks = c(1:10))
+generate_ratings_histogram_density_plots <- function(user_movie_ratings_df, stats_list) {
+  hist_plot <- ggplot(user_movie_ratings_df, aes(x = YOUR.RATING)) +
+    geom_histogram(bins = 10, fill = "yellow", col = "black") +
+    theme_bw() + xlab("Rating") + ylab("Count") +
+    ggtitle("Your IMDb Rating Distribution") +
+    scale_x_continuous(breaks = c(1:10))
 
-ggplot(myMovies1, aes(x = Your.Rating)) +
-  geom_density(col = "black", fill = "yellow", alpha = .8) + theme_bw() +
-  xlab("Rating") + ylab("Density") + ggtitle("Density of my IMDb ratings") +
-  geom_vline(xintercept = (mean(myMovies1$Your.Rating)), linetype = 2) +
-  scale_x_continuous(breaks = c(1:10))
+  dens_plot <- ggplot(user_movie_ratings_df, aes(x = YOUR.RATING)) +
+    geom_density(col = "black", fill = "yellow", alpha = .8) + theme_bw() +
+    xlab("Rating") + ylab("Density") + ggtitle("Your IMDb Rating Distribution") +
+    geom_vline(xintercept = (mean(stats_list$user_mean)), linetype = 2) +
+    scale_x_continuous(breaks = c(1:10))
+  print("Displaying Histogram and Density Plots")
+  print(hist_plot)
+  print(dens_plot)
+  return(list(hist=hist_plot, dens=dens_plot))
+}
 
-#Remove genres with little data (< 3 matches)
-(MovieGenreCount <- myMoviesLong %>% count(Genres) %>% filter(n >= 3))
-cleaned_Movies_Long <- subset(myMoviesLong, Genres %in% MovieGenreCount$Genres)
-
+# Plot the user's average rating by Genre against the average imdb user's
+plot_genre_mean_ratings <- function(user_movie_ratings_df, stats_list) {
 #Create means ratings for each genre
-(myMeans <- cleaned_Movies_Long %>% group_by(Genres) %>% 
-    summarize(MyAvgRating = mean(Your.Rating)))
-(OverallMeans <- cleaned_Movies_Long %>% group_by(Genres) %>%
-    summarize(OverallAvgRating = mean(IMDb.Rating)))
+  
+  myMeans <- user_movie_ratings_df %>% group_by(GENRES) %>% 
+      summarize(MyAvgRating = mean(YOUR.RATING))
+  
+  OverallMeans <- user_movie_ratings_df %>% group_by(GENRES) %>%
+      summarize(OverallAvgRating = mean(IMDB.RATING))
 
-#Calculate how my avg rating performs relative to the overall average
-IMDBMeanHigher <- round(mean(cleaned_Movies_Long$IMDb.Rating) 
-                        - mean(cleaned_Movies_Long$Your.Rating), 2) %>% paste()
+  IMDB_Mean_v_User <- stats_list$user_rating_vs_avg_rating %>% paste()
 
-
-#Plot my mean rating against average mean rating
-ggplot(myMeans, aes(x = Genres, y = MyAvgRating)) +
-  geom_bar(position = "dodge", stat = "summary", fun.y = "mean", col = "black", 
-           fill = "yellow", alpha = .9) +
-  geom_point(data = OverallMeans, aes(y = OverallAvgRating, x = Genres), 
-             size = 4, shape = 4) +
-  theme_bw() +
-  scale_y_continuous(
-    breaks = c(1:10)) +
-  ggtitle(paste("My ratings are", paste(IMDBMeanHigher), "points lower on avg")) +
-  expand_limits(y = 10) +
-  theme(axis.text.x = element_text(hjust = 1)) +
-  coord_flip()
-
-#Subset movies I gave negative and positive reviews
-MyRatingsPositive <- filter(cleaned_Movies_Long, Your.Rating >= 6)
-MyRatingsNegative <- filter(cleaned_Movies_Long, Your.Rating <= 5)
+  #Plot my mean rating against average mean rating
+  genre_ratings_plot <- ggplot(myMeans, aes(x = GENRES, y = MyAvgRating)) +
+    geom_bar(position = "dodge", stat = "summary", fun.y = "mean", col = "black", 
+             fill = "yellow", alpha = .9) +
+    geom_point(data = OverallMeans, aes(y = OverallAvgRating, x = GENRES), 
+               size = 4, shape = 4) +
+    theme_bw() +
+    scale_y_continuous(
+      breaks = c(1:10)) +
+    ggtitle(paste("Your ratings are", paste(IMDB_Mean_v_User), "points lower/higher on avg")) +
+    expand_limits(y = 10) +
+    theme(axis.text.x = element_text(hjust = 1)) +
+    coord_flip()
+  
+  print(genre_ratings_plot)
+  return(genre_ratings_plot)
+}
 
 #Directors watched
 (DirectorCount <- myMovies1 %>% group_by(Directors) %>% count(Directors) %>%
@@ -183,19 +184,22 @@ ggplot(DirectorTop, aes(x = Directors, y = Your.Rating, fill = Directors)) +
   theme_bw() + scale_y_continuous(breaks = c(1:10)) + ylab("My rating") +
   ggtitle("George Lucas was my most consistent director")
 
+#Subset movies I gave negative and positive reviews
+MyRatingsPositive <- filter(cleaned_Movies_Long, Your.Rating >= 6)
+MyRatingsNegative <- filter(cleaned_Movies_Long, Your.Rating <= 5)
 
 #Larger dataset for machine learning, has multiple genre columns
-imdbLarge <- read.csv("~/Desktop/geu/Other_Stuff/imdbmovie/data/imdb-top-14k.csv", stringsAsFactors = FALSE)
-colnames(imdbLarge)
-imdbLarge <- select(imdbLarge, c(-fn, -wordsInTitle, -url, -type, -nrOfWins:-nrOfGenre))
-str(imdbLarge)
-imdbLarge$imdbRating <- as.numeric(imdbLarge$imdbRating)
-imdbLarge$ratingCount <- as.numeric(imdbLarge$ratingCount)
-imdbLarge$year <- as.numeric(imdbLarge$year)
+#imdbLarge <- read.csv("~/Desktop/geu/Other_Stuff/imdbmovie/data/imdb-top-14k.csv", stringsAsFactors = FALSE)
+#colnames(imdbLarge)
+#imdbLarge <- select(imdbLarge, c(-fn, -wordsInTitle, -url, -type, -nrOfWins:-nrOfGenre))
+#str(imdbLarge)
+#imdbLarge$imdbRating <- as.numeric(imdbLarge$imdbRating)
+#imdbLarge$ratingCount <- as.numeric(imdbLarge$ratingCount)
+#imdbLarge$year <- as.numeric(imdbLarge$year)
 imdbLarge <- filter(imdbLarge, ratingCount >= 1000)
 imdbLarge <- arrange(imdbLarge, desc(ratingCount))
-dim(imdbLarge)
-head(imdbLarge)
+#dim(imdbLarge)
+#head(imdbLarge)
 
 
 #Ratings by year
@@ -445,8 +449,15 @@ main <- function() {
   user_movie_ratings_df <- read_user_ratings_input()
   stats_list <- calculate_basic_statistics(merged_imdb_movie_metadata_df, 
                                            user_movie_ratings_df)
-  print(stats_list)
-  return(list(merged_imdb_movie_metadata_df, user_movie_ratings_df))
+  user_ratings_long_df <- transform_df_genres(user_movie_ratings_df)
+  all_imdb_ratings_wide_df <- transform_df_genres(merged_imdb_movie_metadata_df,
+                                                  to_rows=FALSE)
+  plot_genre_mean_ratings(user_movie_ratings_df, stats_list)
+  # <- generate_all_plots(user_movie_ratings_df,merged_imdb_movie_metadata_df, stats_list)
+  return(list(merged_imdb_movie_metadata_df, user_movie_ratings_df, user_ratings_long_df, all_imdb_ratings_wide_df))
 }
 
 x = main()
+
+# Notes
+# Chart graphics need to scale based on user's # of ratings
