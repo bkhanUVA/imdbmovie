@@ -21,6 +21,7 @@ imdb_metadata_file_name <- "movies_metadata_sample.tsv"
 imdb_input_dir <- "~/Desktop/geu/Other_Stuff/imdbmovie/data"
 user_ratings_input_dir <- "~/Desktop/geu/Other_Stuff/imdbmovie/data"
 user_ratings_input_file_name <- "individual_user_ratings_sample.csv"
+seed_id=420
 
 # Utilities
 import_tsv_util <- function(path, file_name, delim) {
@@ -137,13 +138,13 @@ generate_ratings_histogram_density_plots <- function(user_movie_ratings_df, stat
 }
 
 # Plot the user's average rating by Genre against the average imdb user's
-plot_genre_mean_ratings <- function(user_movie_ratings_df, stats_list) {
+plot_genre_mean_ratings <- function(user_ratings_long_df, stats_list) {
 #Create means ratings for each genre
   
-  myMeans <- user_movie_ratings_df %>% group_by(GENRES) %>% 
+  myMeans <- user_ratings_long_df %>% group_by(GENRES) %>% 
       summarize(MyAvgRating = mean(YOUR.RATING))
   
-  OverallMeans <- user_movie_ratings_df %>% group_by(GENRES) %>%
+  OverallMeans <- user_ratings_long_df %>% group_by(GENRES) %>%
       summarize(OverallAvgRating = mean(IMDB.RATING))
 
   IMDB_Mean_v_User <- stats_list$user_rating_vs_avg_rating %>% paste()
@@ -154,10 +155,9 @@ plot_genre_mean_ratings <- function(user_movie_ratings_df, stats_list) {
              fill = "yellow", alpha = .9) +
     geom_point(data = OverallMeans, aes(y = OverallAvgRating, x = GENRES), 
                size = 4, shape = 4) +
-    theme_bw() +
-    scale_y_continuous(
-      breaks = c(1:10)) +
-    ggtitle(paste("Your ratings are", paste(IMDB_Mean_v_User), "points lower/higher on avg")) +
+    theme_bw() + xlab("Genres") + ylab("Your Average Rating (X = IMDB avg)") +
+    scale_y_continuous(breaks = c(1:10)) +
+    ggtitle(paste("Your ratings are", paste(IMDB_Mean_v_User), "points higher than the avg user's")) +
     expand_limits(y = 10) +
     theme(axis.text.x = element_text(hjust = 1)) +
     coord_flip()
@@ -166,58 +166,48 @@ plot_genre_mean_ratings <- function(user_movie_ratings_df, stats_list) {
   return(genre_ratings_plot)
 }
 
-#Directors watched
-(DirectorCount <- myMovies1 %>% group_by(Directors) %>% count(Directors) %>%
-    arrange(desc(n)))
-DirectorTop <- filter(myMovies1, Directors %in% DirectorCount$Directors[1:10])
-DirectorTop <- subset(DirectorTop, str_length(Directors) > 1)
-DirectorTop <- select(DirectorTop, Directors, Your.Rating)
+#My Ratings by year
+plot_ratings_by_year <- function(user_movie_ratings_df) {
+  YearCount <- user_movie_ratings_df %>% group_by(YEAR) %>% count(YEAR) %>% arrange(desc(n))
+  YearCountSig <- filter(YearCount, n >= 5)
+  YearsSig <- filter(user_movie_ratings_df, YEAR %in% YearCountSig$Year)
+  
+  ratings_by_yr_plot <- ggplot(YearsSig, aes(x = YEAR, y = YOUR.RATING)) +
+    geom_jitter(alpha = .8, size = 3, shape = 21, fill = "yellow", width = .1) + 
+    theme_bw() + 
+    scale_y_continuous(breaks = c(1:10)) +
+    geom_smooth(method = "lm", se = FALSE, col = "black") +
+    ylab("My ratings") + ggtitle("Ratings don't really change on movie year")
+  
+  print(ratings_by_yr_plot)
+  return(ratings_by_yr_plot)
+}
 
-ggplot(DirectorCount[2:6,], aes(x = Directors, y = n, fill = Directors)) + 
-  geom_bar(position = "dodge", stat = "summary", fun.y = "mean") + theme_bw() +
-  ylab("Number of movies watched") + 
-  ggtitle("Kenny Ortega is the director I've seen the most")
+run_all_plots <- function(user_movie_ratings_df, user_ratings_long_df, stats_list, year_plot=FALSE) {
+  hist_plot <- generate_ratings_histogram_density_plots(user_movie_ratings_df, stats_list)
+  genre_plot <- plot_genre_mean_ratings(user_ratings_long_df, stats_list)
+  
+  if (year_plot==TRUE) {
+    ratings_yr_plot <- plot_ratings_by_year(user_movie_ratings_df)
+  } else {
+    ratings_yr_plot <- 'User disabled ratings year plot'
+  }
 
-#My Ratings by director
-ggplot(DirectorTop, aes(x = Directors, y = Your.Rating, fill = Directors)) +
-  geom_dotplot(binaxis='y', stackdir='center', alpha = .8) +
-  theme_bw() + scale_y_continuous(breaks = c(1:10)) + ylab("My rating") +
-  ggtitle("George Lucas was my most consistent director")
+  return(list(hist_plt = hist_plot, genre_plt = genre_plot, ratings_yr_plt = ratings_yr_plot))
+}
 
 #Subset movies I gave negative and positive reviews
 MyRatingsPositive <- filter(cleaned_Movies_Long, Your.Rating >= 6)
 MyRatingsNegative <- filter(cleaned_Movies_Long, Your.Rating <= 5)
 
-#Larger dataset for machine learning, has multiple genre columns
-#imdbLarge <- read.csv("~/Desktop/geu/Other_Stuff/imdbmovie/data/imdb-top-14k.csv", stringsAsFactors = FALSE)
-#colnames(imdbLarge)
-#imdbLarge <- select(imdbLarge, c(-fn, -wordsInTitle, -url, -type, -nrOfWins:-nrOfGenre))
-#str(imdbLarge)
-#imdbLarge$imdbRating <- as.numeric(imdbLarge$imdbRating)
-#imdbLarge$ratingCount <- as.numeric(imdbLarge$ratingCount)
-#imdbLarge$year <- as.numeric(imdbLarge$year)
+#Large trans
 imdbLarge <- filter(imdbLarge, ratingCount >= 1000)
 imdbLarge <- arrange(imdbLarge, desc(ratingCount))
-#dim(imdbLarge)
-#head(imdbLarge)
 
 
-#Ratings by year
-imdbYearFilter <- imdbLarge %>% group_by(year) %>% count(year) %>%
-  arrange(desc(n)) %>% filter(n >= 10)
-imdbYearsSig <- filter(imdbLarge, year %in% imdbYearFilter$year)
 
-lm(imdbRating ~ year, data = imdbYearsSig) %>% summary()
-
-ggplot(imdbYearsSig, aes(x = year, y = imdbRating)) +
-  geom_jitter(alpha = .4, width = .2, shape = 21, fill = "yellow") +
-  geom_smooth(method = "lm", col = "black") +
-  theme_bw() + scale_y_continuous(breaks = c(1:10)) +
-  ggtitle("IMDB ratings decline over the years") +
-  ylab("Average IMDB rating")
 
 #Inner Join with IDs
-
 JoinedAllRatings <- inner_join(myMovies1, imdbLarge, by = c("Const" = "tid"))
 JoinedAllRatings$MyMovie <- as.character(JoinedAllRatings$MyMovie)
 JoinedAllRatings$Title.Type <- as.factor(JoinedAllRatings$Title.Type)
@@ -225,23 +215,9 @@ str(JoinedAllRatings)
 JoinedAllRatingsML <- select(JoinedAllRatings, Title, Your.Rating, IMDb.Rating, Year, c(Action:Western))
 str(JoinedAllRatingsML)
 
-#My Ratings by year
-YearCount <- myMovies1 %>% group_by(Year) %>% count(Year) %>% arrange(desc(n))
-YearCountSig <- filter(YearCount, n >= 5)
-YearsSig <- filter(myMovies1, Year %in% YearCountSig$Year)
 
 
-#No significant variation in my ratings by year
-lm(Your.Rating ~ Year, data = YearsSig) %>% summary()
-
-ggplot(YearsSig, aes(x = Year, y = Your.Rating)) +
-  geom_jitter(alpha = .8, size = 3, shape = 21, fill = "yellow", width = .1) + 
-  theme_bw() + 
-  scale_y_continuous(breaks = c(1:10)) +
-  geom_smooth(method = "lm", se = FALSE, col = "black") +
-  ylab("My ratings") + ggtitle("Ratings don't really change on movie year")
-
-#My ratings vs overall
+#My ratings vs overall - turn this into a correlation
 lm(Your.Rating ~ IMDb.Rating, data = myMovies1) %>% summary()
 mean(myMovies1$Your.Rating) - mean(myMovies1$IMDb.Rating)
 
@@ -255,20 +231,7 @@ ggplot(myMovies1, aes(x = IMDb.Rating, y = Your.Rating)) +
   scale_x_continuous(breaks = 1:10) + 
   ggtitle("My avg rating increases as imdb avg rating increases")
 
-#Overall rating vs vote count
-lm(IMDb.Rating ~ ratingCount, data = imdbLarge) %>% summary()
-ggplot(imdbLarge, aes(x = ratingCount, y = imdbRating)) +
-  geom_jitter(alpha = .8, shape = 21, fill = "yellow") +
-  geom_smooth(color = "red") +
-  scale_x_log10() + theme_bw() + ggtitle("avg rating increases  near right tail of rating count")
 
-lm(Your.Rating ~ ratingCount - 1, data = JoinedAllRatings) %>% summary()
-
-ggplot(JoinedAllRatings, aes(x = ratingCount, y = Your.Rating)) +
-  geom_jitter(alpha = .8, size = 3, shape = 21, fill = "yellow", width = .1) +
-  geom_smooth(method = "lm", col = "black", se = FALSE) +
-  scale_x_log10() + theme_bw() + ggtitle("My ratings slightly increase w/ vote count") +
-  scale_y_continuous(breaks = seq(0, 10))
 
 
 #Making Machine learning alg -- binarizating my ratings
@@ -282,7 +245,7 @@ GenresOnlyTest <- select(imdbLarge, c(Action:Western))
 
 
 #knn without considering the imdb rating
-set.seed(420)
+set.seed(seed_id)
 
 resultsknn <- knn(train = GenresOnlyTrain, test = GenresOnlyTest, 
                   cl = Binary_Ratings_Label, k = 10, prob = "TRUE")
@@ -400,64 +363,27 @@ filter(forest_suggestions, predicted == "like")
 imdbLargeML <- select(JoinedAllRatingsML, Title, c(Action:Western))
 
 
-#sim_mat <- rbind.data.frame(BinaryRatings, genre_matrix3)
-#sim_mat <- data.frame(lapply(sim_mat,function(x){as.integer(x)}))
-#convert data to type integer
-
-#Calculate Jaccard distance between user profile and all movies
-#library(proxy)
-#sim_results <- dist(sim_mat, method = "Jaccard")
-#sim_results <- as.data.frame(as.matrix(sim_results[1:8552]))
-#rows <- which(sim_results == min(sim_results))
-#Recommended movies
-#movies[rows,2]
-
-####random stuff####
-
-#plot by duration
-imdb_large_rand <- select(imdbLarge, title:year)
-imdb_large_rand$duration <- as.numeric(imdb_large_rand$duration)
-
-imdb_large_rand <- mutate(imdb_large_rand, duration = (duration/60)/60)
-summary(imdb_large_rand)
-
-imdb_large_rand %>%
-  ggplot(aes(x = year, y = duration)) +
-  geom_jitter(alpha = .5, fill = "yellow", col = "black", width = .2, shape = 21) +
-  theme_bw() + geom_smooth(se = F)
-
-imdb_large_rand %>%
-  ggplot(aes(x = duration, y = imdbRating)) +
-  geom_point(alpha = .8, fill = "yellow", col = "black", shape = 21) +
-  theme_bw() + scale_x_continuous(breaks = 1:15) +
-  geom_smooth()
-#maybe test this with a quadratic regression 
-
-year_breaks <- c(1900, 1910, 1920, 1930, 1940, 1950, 1960, 1970, 1980, 1990, 2000, 2010, 2016)
-
-imdb_large_rand %>%
-  group_by(year) %>%
-  summarize(ratingCount = sum(ratingCount)) %>%
-  ggplot(aes(x = year, y = ratingCount)) +
-  geom_bar(stat = "identity", fill = "yellow", col = "black") +
-  scale_y_continuous(labels = comma) +
-  scale_x_continuous(breaks = year_breaks) +
-  theme_bw()
 
 main <- function() {
   merged_imdb_movie_metadata_df <- read_imdb_input()
   user_movie_ratings_df <- read_user_ratings_input()
-  stats_list <- calculate_basic_statistics(merged_imdb_movie_metadata_df, 
-                                           user_movie_ratings_df)
+  stats_list <- calculate_basic_statistics(
+    merged_imdb_movie_metadata_df, user_movie_ratings_df
+  )
   user_ratings_long_df <- transform_df_genres(user_movie_ratings_df)
-  all_imdb_ratings_wide_df <- transform_df_genres(merged_imdb_movie_metadata_df,
-                                                  to_rows=FALSE)
-  plot_genre_mean_ratings(user_movie_ratings_df, stats_list)
-  # <- generate_all_plots(user_movie_ratings_df,merged_imdb_movie_metadata_df, stats_list)
-  return(list(merged_imdb_movie_metadata_df, user_movie_ratings_df, user_ratings_long_df, all_imdb_ratings_wide_df))
+  all_imdb_ratings_wide_df <- transform_df_genres(
+    merged_imdb_movie_metadata_df, to_rows=FALSE
+  )
+  all_plots <- run_all_plots(
+    user_movie_ratings_df, user_ratings_long_df, stats_list
+  )
+  return(
+    list(merged_imdb_movie_metadata_df, user_movie_ratings_df, user_ratings_long_df, all_imdb_ratings_wide_df)
+  )
 }
 
 x = main()
 
 # Notes
 # Chart graphics need to scale based on user's # of ratings
+# Measure correlation between user rating and avg
