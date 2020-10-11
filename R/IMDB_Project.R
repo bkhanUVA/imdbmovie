@@ -22,6 +22,13 @@ imdb_input_dir <- "~/Desktop/geu/Other_Stuff/imdbmovie/data"
 user_ratings_input_dir <- "~/Desktop/geu/Other_Stuff/imdbmovie/data"
 user_ratings_input_file_name <- "individual_user_ratings_sample.csv"
 seed_id=420
+genres_list <- c("Documentary", "Short", "Animation", "Comedy", "Romance",
+                 "Sport", "Action", "News", "Drama", "Fantasy", "Horror", 
+                 "Biography", "Music", "War", "Crime", "Western",
+                 "Family", "Adventure", "History", "Mystery", "Sci-Fi", 
+                 "Thriller",  "Musical")
+final_cols <- c('CONST', 'YOUR.RATING', 'AVERAGERATING', 'user_rating_flag', 
+                'PRIMARYTITLE', 'TITLETYPE')
 
 # Utilities
 import_tsv_util <- function(path, file_name, delim) {
@@ -109,7 +116,8 @@ calculate_basic_statistics <- function(
     median = median(user_movie_ratings_df$YOUR.RATING),
     user_mean = round(mean(user_movie_ratings_df$YOUR.RATING), 2),
     imdb_mean = round(mean(merged_imdb_movie_metadata_df$AVERAGERATING), 2),
-    standard_dev = sd(user_movie_ratings_df$YOUR.RATING)
+    standard_dev = sd(user_movie_ratings_df$YOUR.RATING),
+    correlation = cor.test(user_movie_ratings_df$YOUR.RATING, user_movie_ratings_df$IMDB.RATING, method='pearson')
   )
   stats_list['user_rating_vs_avg_rating'] = (
     stats_list$imdb_mean - stats_list$user_mean
@@ -196,43 +204,18 @@ run_all_plots <- function(user_movie_ratings_df, user_ratings_long_df, stats_lis
   return(list(hist_plt = hist_plot, genre_plt = genre_plot, ratings_yr_plt = ratings_yr_plot))
 }
 
-#Subset movies I gave negative and positive reviews
-MyRatingsPositive <- filter(cleaned_Movies_Long, Your.Rating >= 6)
-MyRatingsNegative <- filter(cleaned_Movies_Long, Your.Rating <= 5)
-
-#Large trans
-imdbLarge <- filter(imdbLarge, ratingCount >= 1000)
-imdbLarge <- arrange(imdbLarge, desc(ratingCount))
-
-
-
-
-#Inner Join with IDs
-JoinedAllRatings <- inner_join(myMovies1, imdbLarge, by = c("Const" = "tid"))
-JoinedAllRatings$MyMovie <- as.character(JoinedAllRatings$MyMovie)
-JoinedAllRatings$Title.Type <- as.factor(JoinedAllRatings$Title.Type)
-str(JoinedAllRatings)
-JoinedAllRatingsML <- select(JoinedAllRatings, Title, Your.Rating, IMDb.Rating, Year, c(Action:Western))
-str(JoinedAllRatingsML)
-
-
-
-#My ratings vs overall - turn this into a correlation
-lm(Your.Rating ~ IMDb.Rating, data = myMovies1) %>% summary()
-mean(myMovies1$Your.Rating) - mean(myMovies1$IMDb.Rating)
-
-ggplot(myMovies1, aes(x = IMDb.Rating, y = Your.Rating)) +
-  geom_jitter(alpha = .8, size = 3, shape = 21, fill = "yellow", width = .1) +
-  geom_smooth(method = "lm", col = "black") +
-  theme_bw() +
-  xlim(1, 11) +
-  ylim(1, 11) +
-  scale_y_continuous(breaks = 1:10) +
-  scale_x_continuous(breaks = 1:10) + 
-  ggtitle("My avg rating increases as imdb avg rating increases")
-
-
-
+#Prep Data for KNN Processing
+merge_and_clean_final_imdb_df <- function(all_imdb_ratings_wide_df, user_movie_ratings_df) {
+  movies_w_decent_sample_size_df <- filter(all_imdb_ratings_wide_df, NUMVOTES >= 1000) %>%
+    filter(!TITLETYPE %in% c('tvEpisode', 'video', 'videoGame'))
+  user_movie_ratings_df$user_rating_flag <- 1
+  
+  final_imdb_df <- full_join(
+    user_movie_ratings_df, all_imdb_ratings_wide_df,  by=c('CONST'='TCONST')
+    ) %>%
+      select_if(names(.) %in% toupper(c(final_cols, genres_list)))
+  return(final_imdb_df)
+}
 
 #Making Machine learning alg -- binarizating my ratings
 BinaryRatings <- mutate(JoinedAllRatingsML, 
@@ -259,35 +242,6 @@ head(subset(knnsuggestions, predicted == "dislike"), 10)
 head(knnsuggestions, 11)
 str(subset(knnsuggestions, prob == 1))
 count(knnsuggestions, predicted)
-
-####including ratings -- normalizing and setting up####
-#normalized = (x-min(x))/(max(x)-min(x))
-#Binary_Ratings_rat <- BinaryRatings
-#Binary_Ratings_rat$IMDb.Rating <- (BinaryRatings$IMDb.Rating - min(BinaryRatings$IMDb.Rating))/(max(BinaryRatings$IMDb.Rating) - min(BinaryRatings$IMDb.Rating))
-#str(Binary_Ratings_rat)
-#GenresOnlyTrain_rat <- select(Binary_Ratings_rat, IMDb.Rating, c(Action:Western))
-#imdbLarge_rat <- mutate(imdbLarge, IMDb.Rating = 
-#                          (imdbLarge$imdbRating - min(imdbLarge$imdbRating))/
-#                          (max(imdbLarge$imdbRating) - min(imdbLarge$imdbRating)))
-#str(Binary_Ratings_rat)
-#str(imdbLarge_rat)
-#GenresOnlyTest_rat <- select(imdbLarge_rat, IMDb.Rating, c(Action:Western))
-#head(GenresOnlyTest_rat)
-
-####Adding rescaled ratings to the knn model####
-#resultsknn_rat <- knn(train = GenresOnlyTrain_rat, test = GenresOnlyTest_rat, 
- #                     cl = Binary_Ratings_Label, k = 10, prob = "TRUE")
-#knnprob_rat <- attr(resultsknn_rat, "prob")
-#head(knnprob_rat)
-#imdbLargeKNN_rat <- mutate(imdbLarge_rat, predicted = resultsknn_rat, prob = knnprob_rat)
-#imdbLargeKNN_rat$predicted <- factor(imdbLargeKNN_rat$predicted, 
- #                                    levels = c(0,1), labels = c("dislike", "like"))
-#knnsuggestions_rat <- select(imdbLargeKNN_rat, title, IMDb.Rating, predicted, prob)
-#knnsuggestions_rat <- arrange(knnsuggestions_rat, desc(prob))
-#head(subset(knnsuggestions_rat, predicted == "dislike"), 10)
-#head(knnsuggestions_rat, 11)
-#str(subset(knnsuggestions_rat, prob == 1))
-#count(knnsuggestions_rat, predicted)
 
 #rescale using 0 to 1 for imdbratings need to use ifelse for >=7 then knn
 Binary_Ratings_rat2 <- BinaryRatings
@@ -316,54 +270,6 @@ head(knnsuggestions_rat2, 10)
 str(subset(knnsuggestions_rat2, prob == 1))
 count(knnsuggestions_rat2, predicted)
 
-#Decision tree
-tree_train <- select(BinaryRatings, IMDb.Rating, c(Action:LikedMovie))
-tree_train$LikedMovie <- factor(tree_train$LikedMovie, 
-                                      levels = c(0,1), labels = c("dislike", "like"))
-
-tree_model <- bagging(LikedMovie ~ ., data = tree_train, coob = TRUE, minsplit = 5, maxdepth = 15)
-
-imdbLarge_eval <- imdbLarge %>% mutate(IMDb.Rating = imdbRating)
-imdbLarge_eval <- imdbLarge_eval %>% select(IMDb.Rating, c(Action:Western))
-
-tree_pred <- predict(tree_model, imdbLarge_eval, type = "prob")
-#tree_prob <- attr(tree_pred, "prob")
-tree_pred <- as.data.frame(tree_pred)
-tree_suggestions <- mutate(imdbLarge_rat2, predicted = tree_pred$like)
-str(tree_suggestions)
-tree_final <- arrange(tree_suggestions, -predicted)
-tree_final <- select(tree_final, title, imdbRating, predicted)
-unique(tree_final$predicted)
-filter(tree_final, predicted == 1) %>% nrow()
-head(tree_final, 10)
-#rpart.plot(tree_model)
-
-#logistic Regression
-logistic_train <- select(BinaryRatings, IMDb.Rating, c(Action:LikedMovie))
-logistic_train$LikedMovie <- factor(logistic_train$LikedMovie, 
-                                levels = c(0,1), labels = c("dislike", "like"))
-logistic_model <- glm(LikedMovie ~ ., data = logistic_train, family = "binomial")
-logistic_pred <- predict(logistic_model, imdbLarge_eval, type = "response")
-logistic_suggestions <- mutate(imdbLarge_rat2, predicted = logistic_pred)
-logistic_final <- arrange(logistic_suggestions, -predicted)
-logistic_final$predicted <- ifelse(logistic_final$predicted > .99, 1, logistic_final$predicted)
-subset(logistic_final, predicted == 1) %>% nrow()
-head(logistic_final, 10)
-
-#decision forest?
-forest_model <- ranger(LikedMovie ~ ., tree_train, num.trees = 2500, 
-                       respect.unordered.factors = "order", 
-                       seed = 420)
-
-forest_pred <- predict(forest_model, imdbLarge_eval, type ="response")
-forest_suggestions <- mutate(imdbLarge_rat2, predicted = forest_pred$predictions)
-filter(forest_suggestions, predicted == "like")
-
-#clean imdblarge
-imdbLargeML <- select(JoinedAllRatingsML, Title, c(Action:Western))
-
-
-
 main <- function() {
   merged_imdb_movie_metadata_df <- read_imdb_input()
   user_movie_ratings_df <- read_user_ratings_input()
@@ -377,13 +283,15 @@ main <- function() {
   all_plots <- run_all_plots(
     user_movie_ratings_df, user_ratings_long_df, stats_list
   )
+  final_ratings_df <- merge_and_clean_final_imdb_df(all_imdb_ratings_wide_df, user_movie_ratings_df)
   return(
-    list(merged_imdb_movie_metadata_df, user_movie_ratings_df, user_ratings_long_df, all_imdb_ratings_wide_df)
+    list(merged_imdb_movie_metadata_df, user_movie_ratings_df, 
+         user_ratings_long_df, all_imdb_ratings_wide_df, final_ratings_df)
   )
 }
 
-x = main()
+x <- main()
 
 # Notes
-# Chart graphics need to scale based on user's # of ratings
-# Measure correlation between user rating and avg
+# turn paramters into global vars
+# remove tv episdoes, etc from big data list prior to processing (do it in unix script)
