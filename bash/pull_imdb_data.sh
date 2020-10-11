@@ -38,6 +38,9 @@ pull_data() {
     echo "------------------------------------------------------------"
 }
 
+# It is highly recommended you filter the metadata file. This filter reduces datasize by ~70% by
+#  removing TV Episodes, video games, and videos, all of which should be filtered out before running analysis anyway
+#  removing these data significantly decreases downstream Python / R runtimes
 filter_metadata() {
     echo "------------------------------------------------------------"
 
