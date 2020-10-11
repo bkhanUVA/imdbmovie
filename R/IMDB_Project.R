@@ -22,13 +22,12 @@ imdb_input_dir <- "~/Desktop/geu/Other_Stuff/imdbmovie/data"
 user_ratings_input_dir <- "~/Desktop/geu/Other_Stuff/imdbmovie/data"
 user_ratings_input_file_name <- "individual_user_ratings_sample.csv"
 seed_id=420
-genres_list <- c("Documentary", "Short", "Animation", "Comedy", "Romance",
+genres_list <- toupper(c("Documentary", "Short", "Animation", "Comedy", "Romance",
                  "Sport", "Action", "News", "Drama", "Fantasy", "Horror", 
                  "Biography", "Music", "War", "Crime", "Western",
                  "Family", "Adventure", "History", "Mystery", "Sci-Fi", 
-                 "Thriller",  "Musical")
-final_cols <- c('CONST', 'YOUR.RATING', 'AVERAGERATING', 'user_rating_flag', 
-                'PRIMARYTITLE', 'TITLETYPE')
+                 "Thriller",  "Musical"))
+final_cols <- toupper(c('TCONST', 'binary_ratings_imdb', 'binary_ratings_user', 'PRIMARYTITLE', 'IMDB.RATING'))
 
 # Utilities
 import_tsv_util <- function(path, file_name, delim) {
@@ -174,7 +173,7 @@ plot_genre_mean_ratings <- function(user_ratings_long_df, stats_list) {
   return(genre_ratings_plot)
 }
 
-#My Ratings by year
+# My Ratings by year
 plot_ratings_by_year <- function(user_movie_ratings_df) {
   YearCount <- user_movie_ratings_df %>% group_by(YEAR) %>% count(YEAR) %>% arrange(desc(n))
   YearCountSig <- filter(YearCount, n >= 5)
@@ -204,71 +203,73 @@ run_all_plots <- function(user_movie_ratings_df, user_ratings_long_df, stats_lis
   return(list(hist_plt = hist_plot, genre_plt = genre_plot, ratings_yr_plt = ratings_yr_plot))
 }
 
-#Prep Data for KNN Processing
+# Prep Data for KNN Processing
 merge_and_clean_final_imdb_df <- function(all_imdb_ratings_wide_df, user_movie_ratings_df) {
-  movies_w_decent_sample_size_df <- filter(all_imdb_ratings_wide_df, NUMVOTES >= 1000) %>%
-    filter(!TITLETYPE %in% c('tvEpisode', 'video', 'videoGame'))
-  user_movie_ratings_df$user_rating_flag <- 1
+  movies_w_decent_sample_size_df <- filter(all_imdb_ratings_wide_df, NUMVOTES >= 1000)
   
   final_imdb_df <- full_join(
     user_movie_ratings_df, all_imdb_ratings_wide_df,  by=c('CONST'='TCONST')
-    ) %>%
-      select_if(names(.) %in% toupper(c(final_cols, genres_list)))
+  )
+  
+  final_imdb_df <- mutate(final_imdb_df, 
+                          BINARY_RATINGS_USER = ifelse(final_imdb_df$YOUR.RATING >= 6, 1, 0),
+                          BINARY_RATINGS_IMDB = ifelse(final_imdb_df$AVERAGERATING >= 6, 1, 0)
+  ) %>% select_if(names(.) %in% c(final_cols, genres_list))
   return(final_imdb_df)
 }
 
 #Making Machine learning alg -- binarizating my ratings
-BinaryRatings <- mutate(JoinedAllRatingsML, 
-                 LikedMovie = ifelse(JoinedAllRatings$Your.Rating > 5, 1, 0))
-BinaryRatings$LikedMovie <- as.numeric(BinaryRatings$LikedMovie)
-BinaryRatings %>% filter(Action == 1) %>% count(LikedMovie)
-Binary_Ratings_Label <- BinaryRatings$LikedMovie
-GenresOnlyTrain <- select(BinaryRatings, c(Action:Western))
-GenresOnlyTest <- select(imdbLarge, c(Action:Western))
+#Binary_Ratings_Label <- BinaryRatings$LikedMovie
+#GenresOnlyTrain <- select(BinaryRatings, c(Action:Western))
+#GenresOnlyTest <- select(imdbLarge, c(Action:Western))
+#final_imdb_df$binary_ratings_label <- as.numeric(final_imdb_df$binary_ratings_label)
 
+run_knn_report_results <- function(final_imdb_df, user_movie_ratings_df) {
+  
+  binary_ratings_label <- filter(final_imdb_df, !is.na(BINARY_RATINGS_IMDB))
+  binary_ratings_label <- binary_ratings_label$BINARY_RATINGS_USER
+  
+  knn_train_df <- filter(final_imdb_df, !is.na(BINARY_RATINGS_IMDB)) %>% 
+    select_if(names(.) %in% c('BINARY_RATINGS_IMDB', genres_list))
+  
+  knn_test_df <- final_imdb_df %>% select_if(names(.) %in% c('BINARY_RATINGS_IMDB', genres_list))
+  
+  #remove this later
+  knn_test_df <- na.omit(knn_test_df)
+  knn_train_df <- na.omit(knn_train_df)
+  binary_ratings_label[is.na(binary_ratings_label)] <- 0
 
-#knn without considering the imdb rating
-set.seed(seed_id)
+  # orig k value was 11
+  knn_results <- knn(train = knn_train_df, test = knn_test_df, 
+                        cl = binary_ratings_label, k = 2, prob = "TRUE")
+  
+  knn_probability <- attr(knn_results, "prob")
 
-resultsknn <- knn(train = GenresOnlyTrain, test = GenresOnlyTest, 
-                  cl = Binary_Ratings_Label, k = 10, prob = "TRUE")
-knnprob <- attr(resultsknn, "prob")
-head(knnprob)
-imdbLargeKNN <- mutate(imdbLarge, predicted = resultsknn, prob = knnprob)
-imdbLargeKNN$predicted <- factor(imdbLargeKNN$predicted, levels = c(0,1), labels = c("dislike", "like"))
-knnsuggestions <- select(imdbLargeKNN, title, imdbRating, predicted, prob)
-knnsuggestions <- arrange(knnsuggestions, desc(prob))
-head(subset(knnsuggestions, predicted == "dislike"), 10)
-head(knnsuggestions, 11)
-str(subset(knnsuggestions, prob == 1))
-count(knnsuggestions, predicted)
-
-#rescale using 0 to 1 for imdbratings need to use ifelse for >=7 then knn
-Binary_Ratings_rat2 <- BinaryRatings
-Binary_Ratings_rat2$IMDb.Rating <- ifelse(BinaryRatings$IMDb.Rating >=7, 1, 0)
-GenresOnlyTrain_rat2 <- select(Binary_Ratings_rat2, IMDb.Rating, c(Action:Western))
-imdbLarge_rat2 <- mutate(imdbLarge, IMDb.Rating = ifelse(
-  imdbLarge$imdbRating >=7, 1, 0))
-str(imdbLarge_rat)
-GenresOnlyTest_rat2 <- select(imdbLarge_rat2, IMDb.Rating, c(Action:Western))
-head(GenresOnlyTest_rat2)
-
-resultsknn_rat2 <- knn(train = GenresOnlyTrain_rat2, test = GenresOnlyTest_rat2, 
-                      cl = Binary_Ratings_Label, k = 11, prob = "TRUE")
-knnprob_rat2 <- attr(resultsknn_rat2, "prob")
-head(knnprob_rat2)
-imdbLargeKNN_rat2 <- mutate(imdbLarge_rat2, 
-                            predicted = resultsknn_rat2, prob = knnprob_rat2)
-imdbLargeKNN_rat2$predicted <- factor(imdbLargeKNN_rat2$predicted, 
-                                     levels = c(0,1), labels = c("dislike", "like"))
-knnsuggestions_rat2 <- select(imdbLargeKNN_rat2, tid, title, IMDb.Rating, predicted, prob)
-knnsuggestions_rat2 <- arrange(knnsuggestions_rat2, desc(prob))
-knnsuggestions_rat2 <- mutate(knnsuggestions_rat2, IMDb.Rating = imdbLarge$imdbRating)
-knnsuggestions_rat2 <- anti_join(knnsuggestions_rat2, myMovies1, by = c("tid" = "Const"))
-head(subset(knnsuggestions_rat2, predicted == "dislike"), 10)
-head(knnsuggestions_rat2, 10)
-str(subset(knnsuggestions_rat2, prob == 1))
-count(knnsuggestions_rat2, predicted)
+  print(knn_results)
+  print(knn_probability)
+  
+  # Issue - I need to drop na items from this df as well
+  imdb_final_knn_df <- mutate(
+    final_imdb_df, PREDICTED = knn_results, PROB = knn_probability
+  )
+  imdb_final_knn_df$PREDICTED <- factor(imdb_final_knn_df$PREDICTED, 
+                                       levels = c(0,1), labels = c("dislike", "like"))
+  knn_suggestions_df <- select(
+    imdb_final_knn_df, TCONST, PRIMARYTITLE, AVERAGERATING, PREDICTED, PROB
+  ) %>% 
+    arrange(desc(PROB)) %>%
+  final_knn_suggestions_df <- anti_join(knn_suggestions_df, user_movie_ratings_df, by = c("TCONST" = "CONST"))
+  
+  print("Most Likely to dislike:")
+  print(head(subset(final_knn_suggestions_df, PREDICTED == "dislike"), 10))
+  print("Most likely to like:")
+  top_suggestions_df <- head(final_knn_suggestions_df, 10)
+  print(top_suggestions_df)
+  print("Misc:")
+  print(str(subset(final_knn_suggestions_df, PROB == 1)))
+  print(count(final_knn_suggestions_df, PREDICTED))
+  return(top_suggestions_df)
+}
 
 main <- function() {
   merged_imdb_movie_metadata_df <- read_imdb_input()
@@ -283,10 +284,13 @@ main <- function() {
   all_plots <- run_all_plots(
     user_movie_ratings_df, user_ratings_long_df, stats_list
   )
-  final_ratings_df <- merge_and_clean_final_imdb_df(all_imdb_ratings_wide_df, user_movie_ratings_df)
+  final_ratings_df <- merge_and_clean_final_imdb_df(
+    all_imdb_ratings_wide_df, user_movie_ratings_df
+  )
+ recommendations <- run_knn_report_results(final_ratings_df, select(user_movie_ratings_df, CONST))
   return(
-    list(merged_imdb_movie_metadata_df, user_movie_ratings_df, 
-         user_ratings_long_df, all_imdb_ratings_wide_df, final_ratings_df)
+    list(merged_imdb_movie_metadata_df, user_movie_ratings_df, stats_list,
+         user_ratings_long_df, all_imdb_ratings_wide_df, final_ratings_df, recommendations)
   )
 }
 
@@ -295,4 +299,8 @@ x <- main()
 # Notes
 # turn paramters into global vars
 # remove tv episdoes, etc from big data list prior to processing (do it in unix script)
-# drop movies with no ratings
+# drop movies with no ratings / coalesce AVERAGERATING with IMDB.RATING
+# tune nearest # param
+# i'm training on my final run dataset lol
+# standard dize function input / output
+# remove user movies df input to knn functin
