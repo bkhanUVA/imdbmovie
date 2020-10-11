@@ -295,3 +295,4 @@ x <- main()
 # Notes
 # turn paramters into global vars
 # remove tv episdoes, etc from big data list prior to processing (do it in unix script)
+# drop movies with no ratings
