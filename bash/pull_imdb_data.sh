@@ -57,7 +57,8 @@ filter_metadata() {
     echo "------------------------------------------------------------"
 }
 
-quick_validations() {
+# A basic validation to see if the data was downloaded
+basic_validations() {
     echo "------------------------------------------------------------"
     echo "STATUS: Starting Validations"
 
@@ -104,5 +105,5 @@ echo "STATUS: PULLING DATA - WARNING, this script pulls and uzips several large 
 pull_data "$pull_meta" "movies_metadata" "title.basics.tsv.gz"
 pull_data "$pull_rating" "movies_ratings" "title.ratings.tsv.gz"
 filter_metadata "movies_metadata"
-quick_validations "movies_metadata" "movies_ratings"
+basic_validations "movies_metadata" "movies_ratings"
 echo "STATUS: pull_imdb_data.sh Complete"
