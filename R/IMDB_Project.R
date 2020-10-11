@@ -27,7 +27,7 @@ genres_list <- toupper(c("Documentary", "Short", "Animation", "Comedy", "Romance
                  "Biography", "Music", "War", "Crime", "Western",
                  "Family", "Adventure", "History", "Mystery", "Sci-Fi", 
                  "Thriller",  "Musical"))
-final_cols <- toupper(c('TCONST', 'binary_ratings_imdb', 'binary_ratings_user', 'PRIMARYTITLE', 'IMDB.RATING'))
+final_cols <- toupper(c('CONST', 'binary_ratings_imdb', 'binary_ratings_user', 'PRIMARYTITLE', 'AVERAGERATING', 'IMDB.RATING'))
 
 # Utilities
 import_tsv_util <- function(path, file_name, delim) {
@@ -225,16 +225,18 @@ merge_and_clean_final_imdb_df <- function(all_imdb_ratings_wide_df, user_movie_r
 #final_imdb_df$binary_ratings_label <- as.numeric(final_imdb_df$binary_ratings_label)
 
 run_knn_report_results <- function(final_imdb_df, user_movie_ratings_df) {
+  # i reworked this quickly so it just runs... results & statistics are likely bad
+  # tmp / bad soltion so i an get knn to run... need to fix this
+  final_imdb_df <- filter(final_imdb_df, !is.na(BINARY_RATINGS_IMDB))
   
-  binary_ratings_label <- filter(final_imdb_df, !is.na(BINARY_RATINGS_IMDB))
-  binary_ratings_label <- binary_ratings_label$BINARY_RATINGS_USER
+  binary_ratings_label <- final_imdb_df$BINARY_RATINGS_USER
   
-  knn_train_df <- filter(final_imdb_df, !is.na(BINARY_RATINGS_IMDB)) %>% 
+  knn_train_df <- final_imdb_df %>% 
     select_if(names(.) %in% c('BINARY_RATINGS_IMDB', genres_list))
   
   knn_test_df <- final_imdb_df %>% select_if(names(.) %in% c('BINARY_RATINGS_IMDB', genres_list))
   
-  #remove this later
+  # remove this later
   knn_test_df <- na.omit(knn_test_df)
   knn_train_df <- na.omit(knn_train_df)
   binary_ratings_label[is.na(binary_ratings_label)] <- 0
@@ -244,9 +246,6 @@ run_knn_report_results <- function(final_imdb_df, user_movie_ratings_df) {
                         cl = binary_ratings_label, k = 2, prob = "TRUE")
   
   knn_probability <- attr(knn_results, "prob")
-
-  print(knn_results)
-  print(knn_probability)
   
   # Issue - I need to drop na items from this df as well
   imdb_final_knn_df <- mutate(
@@ -254,11 +253,13 @@ run_knn_report_results <- function(final_imdb_df, user_movie_ratings_df) {
   )
   imdb_final_knn_df$PREDICTED <- factor(imdb_final_knn_df$PREDICTED, 
                                        levels = c(0,1), labels = c("dislike", "like"))
+  
+  print(imdb_final_knn_df)
   knn_suggestions_df <- select(
-    imdb_final_knn_df, TCONST, PRIMARYTITLE, AVERAGERATING, PREDICTED, PROB
+    imdb_final_knn_df, CONST, PRIMARYTITLE, AVERAGERATING, PREDICTED, PROB
   ) %>% 
-    arrange(desc(PROB)) %>%
-  final_knn_suggestions_df <- anti_join(knn_suggestions_df, user_movie_ratings_df, by = c("TCONST" = "CONST"))
+    arrange(desc(PROB))
+  final_knn_suggestions_df <- anti_join(knn_suggestions_df, user_movie_ratings_df, by = c("CONST" = "CONST"))
   
   print("Most Likely to dislike:")
   print(head(subset(final_knn_suggestions_df, PREDICTED == "dislike"), 10))
