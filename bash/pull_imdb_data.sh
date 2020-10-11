@@ -45,7 +45,7 @@ filter_metadata() {
     then
         echo "Initial Metadata Row Count: $(< $out_dir/$1.tsv wc -l)"
         echo "STATUS: Removing individual TV Episodes, videos, and videogames from metadata file"
-        #awk '{ print $2 }' $out_dir/$1.tsv| head -5
+        # Title Type (movie, tv, etc) is stored in 2nd column
         awk -F "\t" '! ( $2 ~ /tvEpisode/ || $2 ~ /video/ || $2 ~ /videoGame/ )' $out_dir/$1.tsv > $out_dir/$1_filtered.tsv
         mv $out_dir/$1_filtered.tsv $out_dir/$1.tsv
         echo "Filtered Metadata Row Count: $(< $out_dir/$1.tsv wc -l)"
@@ -61,12 +61,14 @@ quick_validations() {
     echo "------------------------------------------------------------"
     echo "STATUS: Starting Validations"
 
+    # Only run validation if user specified for file to be downloaded
     if ! [ -z $pull_meta ]
     then
        meta_wc=$(< $out_dir/$1.tsv wc -l)
        if [ $meta_wc -ge $meta_test_threshold ]
        then
           echo "STATUS: Metadata File Validation PASSED, file row count of $meta_wc > than threshold of $meta_test_threshold"
+          # define status for passed tests to prevent missing variable error in scenarios where both tests pass 
           status=0
        else
           echo "STATUS: Metadata File Validation FAILED, file row count of $meta_wc < than threshold of $meta_test_threshold"
