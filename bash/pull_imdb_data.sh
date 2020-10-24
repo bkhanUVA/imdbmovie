@@ -60,46 +60,36 @@ filter_metadata() {
     echo "------------------------------------------------------------"
 }
 
-# A basic validation to see if the data was downloaded
+# A basic validation to see if the data was downloaded correctly
 basic_validations() {
     echo "------------------------------------------------------------"
-    echo "STATUS: Starting Validations"
 
     # Only run validation if user specified for file to be downloaded
-    if ! [ -z $pull_meta ]
+    if ! [ -z $2 ]
     then
-       meta_wc=$(< $out_dir/$1.tsv wc -l)
-       if [ $meta_wc -ge $meta_test_threshold ]
+       echo "STATUS: Starting Validations"
+       file_wc=$(< $out_dir/$1.tsv wc -l)
+       if [ $file_wc -ge $3 ]
        then
-          echo "STATUS: Metadata File Validation PASSED, file row count of $meta_wc > than threshold of $meta_test_threshold"
+          echo "STATUS: $1 File Validation PASSED, file row count of $file_wc > than threshold of $3"
           # define status for passed tests to prevent missing variable error in scenarios where both tests pass 
           status=0
        else
-          echo "STATUS: Metadata File Validation FAILED, file row count of $meta_wc < than threshold of $meta_test_threshold"
+          echo "STATUS: $1 File Validation FAILED, file row count of $file_wc < than threshold of $3"
           status=1
        fi
     fi
 
-    if ! [ -z $pull_rating ]
+    if [ "$status" -eq "1" ] && ! [ -z $2 ]
     then
-       rating_wc=$(< $out_dir/$2.tsv wc -l)
-       if [ $rating_wc -ge $rating_test_threshold ]
-       then
-          echo "STATUS: Rating File Validation PASSED, file row count of $rating_wc > than threshold of $rating_test_threshold"
-          status=0
-       else
-          echo "STATUS: Rating File Validation FAILED, file row count of $rating_wc < than threshold of $rating_test_threshold"
-          status=1
-       fi
-    fi
-
-    if [ "$status" -eq "1" ]
-    then
-       echo "ERROR: FILE VALIDATIONS FAILED"
+       echo "ERROR: $1 VALIDATIONS FAILED"
        echo "------------------------------------------------------------"
        exit 1
+    elif [ "$status" -eq "0" ] && ! [ -z $2 ]
+    then
+       echo "STATUS: $1 VALIDATIONS PASSED"
     else
-       echo "STATUS: FILE VALIDATIONS PASSED"
+       echo "STATUS: Skipped validations for $1 as file download was skipped"
     fi
     echo "------------------------------------------------------------"
 }
@@ -108,5 +98,6 @@ echo "STATUS: PULLING DATA - WARNING, this script pulls and uzips several large 
 pull_data "$pull_meta" "movies_metadata" "title.basics.tsv.gz"
 pull_data "$pull_rating" "movies_ratings" "title.ratings.tsv.gz"
 filter_metadata "movies_metadata"
-basic_validations "movies_metadata" "movies_ratings"
+basic_validations "movies_metadata" "$pull_meta" "$meta_test_threshold"
+basic_validations "movies_ratings" "$pull_rating" "$rating_test_threshold"
 echo "STATUS: pull_imdb_data.sh Complete"
