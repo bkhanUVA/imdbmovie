@@ -346,9 +346,7 @@ main <- function() {
 # Run script
 final_run_results <- main()
 
-# Notes
-# turn paramters into global vars
-# drop movies with no ratings / coalesce AVERAGERATING with IMDB.RATING
+# Notes (see issues in github for more)
 # i'm training on my final run dataset lol
 # standard function input / output
 # remove user movies df input to knn functin
