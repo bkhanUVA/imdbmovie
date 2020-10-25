@@ -15,13 +15,17 @@ imdb_input_dir <- "~/Desktop/geu/Other_Stuff/imdbmovie/data"
 user_ratings_input_dir <- "~/Desktop/geu/Other_Stuff/imdbmovie/data"
 user_ratings_input_file_name <- "individual_user_ratings_sample.csv"
 seed_id <- 420
+num_votes_filter <- 1000
+good_rating_cutoff <- 6
+# Pre-merge, fields have inconsistent casing, they are set to UPPER after merge
 genres_list <- toupper(c("Documentary", "Short", "Animation", "Comedy", 
-                         "Romance","Sport", "Action", "News", "Drama", 
+                         "Romance","Sport", "Action", "News", "Drama",
                          "Fantasy", "Horror", "Biography", "Music", "War",
                          "Crime", "Western", "Family", "Adventure", "History",
                          "Mystery", "Sci-Fi", "Thriller",  "Musical"))
-final_cols <- toupper(c('CONST', 'binary_ratings_imdb', 'binary_ratings_user',
-                        'PRIMARYTITLE', 'AVERAGERATING', 'IMDB.RATING'))
+final_cols <- toupper(c('const', 'binary_ratings_imdb', 
+                        'binary_ratings_user', 'PRIMARYTITLE', 'AVERAGERATING',
+                        'IMDB.RATING'))
 
 
 ##########################
@@ -150,7 +154,8 @@ generate_ratings_histogram_density_plots <- function(user_movie_ratings_df,
 
   dens_plot <- ggplot(user_movie_ratings_df, aes(x = YOUR.RATING)) +
     geom_density(col = "black", fill = "yellow", alpha = .8) + theme_bw() +
-    xlab("Rating") + ylab("Density") + ggtitle("Your IMDb Rating Distribution") +
+    xlab("Rating") + ylab("Density") +
+    ggtitle("Your IMDb Rating Distribution") +
     geom_vline(xintercept = (mean(stats_list$user_mean)), linetype = 2) +
     scale_x_continuous(breaks = c(1:10))
   
@@ -172,13 +177,14 @@ plot_genre_mean_ratings <- function(user_ratings_long_df, stats_list) {
 
   # Plot user's mean rating against average mean rating
   genre_ratings_plot <- ggplot(myMeans, aes(x = GENRES, y = MyAvgRating)) +
-    geom_bar(position = "dodge", stat = "summary", fun.y = "mean", col = "black", 
-             fill = "yellow", alpha = .9) +
+    geom_bar(position = "dodge", stat = "summary", fun.y = "mean",
+             col = "black", fill = "yellow", alpha = .9) +
     geom_point(data = OverallMeans, aes(y = OverallAvgRating, x = GENRES), 
                size = 4, shape = 4) +
     theme_bw() + xlab("Genres") + ylab("Your Average Rating (X = IMDB avg)") +
     scale_y_continuous(breaks = c(1:10)) +
-    ggtitle(paste("Your ratings are", paste(IMDB_Mean_v_User), "points higher than the avg user's")) +
+    ggtitle(paste("Your ratings are", paste(IMDB_Mean_v_User),
+                  "points higher than the avg user's")) +
     expand_limits(y = 10) +
     theme(axis.text.x = element_text(hjust = 1)) +
     coord_flip()
@@ -190,7 +196,10 @@ plot_genre_mean_ratings <- function(user_ratings_long_df, stats_list) {
 
 plot_ratings_by_year <- function(user_movie_ratings_df) {
   # Plot how ratings vary by year
-  YearCount <- user_movie_ratings_df %>% group_by(YEAR) %>% count(YEAR) %>% arrange(desc(n))
+  YearCount <- user_movie_ratings_df %>%
+    group_by(YEAR) %>%
+    count(YEAR) %>%
+    arrange(desc(n))
   YearCountSig <- filter(YearCount, n >= 5)
   YearsSig <- filter(user_movie_ratings_df, YEAR %in% YearCountSig$Year)
   
@@ -205,9 +214,12 @@ plot_ratings_by_year <- function(user_movie_ratings_df) {
   return(ratings_by_yr_plot)
 }
 
-run_all_plots <- function(user_movie_ratings_df, user_ratings_long_df, stats_list, year_plot=FALSE) {
+run_all_plots <- function(user_movie_ratings_df, user_ratings_long_df,
+                          stats_list, year_plot=FALSE) {
   # Run all plotting functions
-  hist_plot <- generate_ratings_histogram_density_plots(user_movie_ratings_df, stats_list)
+  hist_plot <- generate_ratings_histogram_density_plots(
+    user_movie_ratings_df, stats_list
+  )
   genre_plot <- plot_genre_mean_ratings(user_ratings_long_df, stats_list)
   
   # Year plot is buggy on smaller datasets
@@ -217,7 +229,11 @@ run_all_plots <- function(user_movie_ratings_df, user_ratings_long_df, stats_lis
     ratings_yr_plot <- 'User disabled ratings year plot'
   }
   
-  return(list(hist_plt = hist_plot, genre_plt = genre_plot, ratings_yr_plt = ratings_yr_plot))
+  return(list(
+    hist_plt = hist_plot,
+    genre_plt = genre_plot,
+    ratings_yr_plt = ratings_yr_plot)
+  )
 }
 
 
@@ -228,19 +244,24 @@ merge_and_clean_final_imdb_df <- function(all_imdb_ratings_wide_df,
                                           user_movie_ratings_df) {
   # Merge user ratings with all ratings so KNN can create predictions
   #  Remove movies with few views (< 1000 ratings)
-  #  binarize ratings (>= 6 means you like the movie, <6 = dislike)
+  #  binarize ratings (>= good_rating_cutoff means you like the movie,
+  #  < good_rating_cutoff = dislike)
   movies_w_decent_sample_size_df <- filter(
-    all_imdb_ratings_wide_df, NUMVOTES >= 1000
-    )
+    all_imdb_ratings_wide_df, NUMVOTES >= num_votes_filter
+  )
   
   final_imdb_df <- full_join(
-    user_movie_ratings_df, all_imdb_ratings_wide_df,  by=c('CONST'='TCONST')
+    user_movie_ratings_df,
+    all_imdb_ratings_wide_df,
+    by=c('CONST' = 'TCONST')
   )
   
   final_imdb_df <- mutate(
-    final_imdb_df, 
-    BINARY_RATINGS_USER = ifelse(final_imdb_df$YOUR.RATING >= 6, 1, 0),
-    BINARY_RATINGS_IMDB = ifelse(final_imdb_df$AVERAGERATING >= 6, 1, 0)
+    final_imdb_df,
+    BINARY_RATINGS_USER =
+      ifelse(final_imdb_df$YOUR.RATING >= good_rating_cutoff, 1, 0),
+    BINARY_RATINGS_IMDB =
+      ifelse(final_imdb_df$AVERAGERATING >= good_rating_cutoff, 1, 0)
   ) %>% 
     select_if(names(.) %in% c(final_cols, genres_list))
   return(final_imdb_df)
@@ -259,7 +280,8 @@ run_knn_report_results <- function(final_imdb_df, user_movie_ratings_df,
   knn_train_df <- final_imdb_df %>% 
     select_if(names(.) %in% c('BINARY_RATINGS_IMDB', genres_list))
   
-  knn_test_df <- final_imdb_df %>% select_if(names(.) %in% c('BINARY_RATINGS_IMDB', genres_list))
+  knn_test_df <- final_imdb_df %>%
+    select_if(names(.) %in% c('BINARY_RATINGS_IMDB', genres_list))
   
   # remove this later
   knn_test_df <- na.omit(knn_test_df)
@@ -294,7 +316,11 @@ run_knn_report_results <- function(final_imdb_df, user_movie_ratings_df,
     imdb_final_knn_df, CONST, PRIMARYTITLE, AVERAGERATING, PREDICTED, PROB
   ) %>% 
     arrange(desc(PROB))
-  final_knn_suggestions_df <- anti_join(knn_suggestions_df, user_movie_ratings_df, by = c("CONST" = "CONST"))
+  final_knn_suggestions_df <- anti_join(
+    knn_suggestions_df,
+    user_movie_ratings_df,
+    by = c('CONST' = 'CONST')
+  )
   
   print("Most Likely to dislike:")
   print(head(subset(final_knn_suggestions_df, PREDICTED == "dislike"), 10))
@@ -327,8 +353,8 @@ main <- function() {
   final_ratings_df <- merge_and_clean_final_imdb_df(
     all_imdb_ratings_wide_df, user_movie_ratings_df
   )
- recommendations <- run_knn_report_results(
-   final_ratings_df, select(user_movie_ratings_df, CONST), stats_list
+  recommendations <- run_knn_report_results(
+    final_ratings_df, select(user_movie_ratings_df, CONST), stats_list
   )
   return(
     list(
