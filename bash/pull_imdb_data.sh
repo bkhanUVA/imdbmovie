@@ -5,10 +5,14 @@
 # Sample Command to pull all data: ./pull_imdb_data.sh -o ~/Desktop -mrf
 
 # Defaults
+dt=$(date '+%Y%m%d')
 out_dir=imdbmovie/data
 imdb_api=https://datasets.imdbws.com
 meta_test_threshold=1000000
 rating_test_threshold=1000000
+meta_file_name=movies_metadata_$dt
+ratings_file_name=movies_ratings_$dt
+
 
 while getopts i:o:p:t:mrf flag
 do
@@ -23,7 +27,8 @@ do
     esac
 done
 
-pull_data() {    
+
+pull_data() {
     echo "------------------------------------------------------------"
 
     if ! [ -z $1 ]
@@ -37,6 +42,7 @@ pull_data() {
     echo "STATUS: Downloads Complete"
     echo "------------------------------------------------------------"
 }
+
 
 # It is highly recommended you filter the metadata file. This filter reduces datasize by ~70% by
 #  removing TV Episodes, video games, and videos, all of which should be filtered out before running analysis anyway
@@ -59,6 +65,7 @@ filter_metadata() {
     echo "STATUS: Filtering Complete"
     echo "------------------------------------------------------------"
 }
+
 
 # A basic validation to see if the data was downloaded correctly
 basic_validations() {
@@ -94,10 +101,11 @@ basic_validations() {
     echo "------------------------------------------------------------"
 }
 
+
 echo "STATUS: PULLING DATA - WARNING, this script pulls and uzips several large files"
-pull_data "$pull_meta" "movies_metadata" "title.basics.tsv.gz"
-pull_data "$pull_rating" "movies_ratings" "title.ratings.tsv.gz"
-filter_metadata "movies_metadata"
-basic_validations "movies_metadata" "$pull_meta" "$meta_test_threshold"
-basic_validations "movies_ratings" "$pull_rating" "$rating_test_threshold"
+pull_data "$pull_meta" "$meta_file_name" "title.basics.tsv.gz"
+pull_data "$pull_rating" "$ratings_file_name" "title.ratings.tsv.gz"
+filter_metadata "$meta_file_name"
+basic_validations "$meta_file_name" "$pull_meta" "$meta_test_threshold"
+basic_validations "$ratings_file_name" "$pull_rating" "$rating_test_threshold"
 echo "STATUS: pull_imdb_data.sh Complete"

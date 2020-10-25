@@ -14,7 +14,7 @@ imdb_metadata_file_name <- "movies_metadata_sample.tsv"
 imdb_input_dir <- "~/Desktop/geu/Other_Stuff/imdbmovie/data"
 user_ratings_input_dir <- "~/Desktop/geu/Other_Stuff/imdbmovie/data"
 user_ratings_input_file_name <- "individual_user_ratings_sample.csv"
-seed_id=420
+seed_id <- 420
 genres_list <- toupper(c("Documentary", "Short", "Animation", "Comedy", 
                          "Romance","Sport", "Action", "News", "Drama", 
                          "Fantasy", "Horror", "Biography", "Music", "War",
