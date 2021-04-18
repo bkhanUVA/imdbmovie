@@ -14,6 +14,7 @@ from typing import NamedTuple, List
 _FILE_DELIM = '\t'
 _PKEY = 'tconst'
 _VOTES_CUTOFF = 1000
+_GENRES_FIELD = 'GENRES'
 _GENRES_TO_KEEP = \
     [genre.upper() for genre in
         [
@@ -52,8 +53,8 @@ def _read_args(args: List[str]) -> NamedTuple:
     )
     parser.add_argument(
         "--output-path",
-        help="""Transformed file's output path, including file name.
-        Ex: --output-path /home/outpath/final_file.tsv""",
+        help="""Transformed files' output path, excluding file name.
+        Ex: --output-path /home/outpath""",
         type=str,
         required=True
     )
@@ -76,6 +77,7 @@ def _import_join_data(env: _Env) -> pd.DataFrame:
     metadata_df = import_tsv(env.imdbMetadataPath)
     merged_df = ratings_df.merge(metadata_df, how='inner', on=_PKEY)
     merged_df.columns = merged_df.columns.str.upper()
+    merged_df[_GENRES_FIELD] = merged_df[_GENRES_FIELD].str.upper()
     return _drop_low_viewed_movies(merged_df)
 
 
@@ -99,25 +101,48 @@ def _genres_to_columns(merged_filtered_df: pd.DataFrame) -> pd.DataFrame:
     Use 1 and 0 to mark whether a movie is associated with a genre or not"""
     # Move to utils script?
     print("Transforming single genre column into multiple genre flag columns")
-    merged_filtered_df['GENRES'] = merged_filtered_df['GENRES'].str.upper()
+    merged_wide_df = merged_filtered_df.copy(deep=True)
     for genre in _GENRES_TO_KEEP:
         # If the movie is associated with a genre set it to 1, otherwise 0
-        merged_filtered_df[genre] = \
-            merged_filtered_df['GENRES'].str.contains(genre).astype(int)
-    return merged_filtered_df
+        merged_wide_df[genre] = \
+            merged_wide_df[_GENRES_FIELD].str.contains(genre).astype(int)
+    return merged_wide_df
 
 
-def export_tsv(output_path: str, merged_filtered_df: pd.DataFrame):
+def _genres_to_rows(merged_filtered_df: pd.DataFrame) -> pd.DataFrame:
+    """Take the genres column and create a duplicate record for each genre the
+    movie is in"""
+    print("Creating a record for each genre each movie is in")
+    merged_long_df = merged_filtered_df.copy(deep=True)
+    merged_long_df[_GENRES_FIELD] = merged_long_df[_GENRES_FIELD].str.split(",")
+    merged_long_df = merged_long_df.explode(_GENRES_FIELD)
+    return merged_long_df.reset_index(drop=True)
+
+
+def export_tsv(
+        output_path: str, output_name: str, merged_filtered_df: pd.DataFrame
+):
     # Move to utils script?
-    print(f"Outputting final file to {output_path}")
-    merged_filtered_df.to_csv(output_path, sep=_FILE_DELIM)
+    full_out_path = f'{output_path}/{output_name}.tsv'
+    print(f"Outputting final file to {full_out_path}")
+    merged_filtered_df.to_csv(full_out_path, sep=_FILE_DELIM)
+
+
+def _export_dfs(
+        output_path: str,
+        merged_wide_df: pd.DataFrame,
+        merged_long_df: pd.DataFrame
+):
+    export_tsv(output_path, 'test_wide', merged_wide_df)
+    export_tsv(output_path, 'test_long', merged_long_df)
 
 
 def main():
     env = _read_args(sys.argv[1:])
     merged_filtered_df = _import_join_data(env)
     merged_wide_df = _genres_to_columns(merged_filtered_df)
-    export_tsv(env.outPath, merged_wide_df)
+    merged_long_df = _genres_to_rows(merged_filtered_df)
+    _export_dfs(env.outPath, merged_wide_df, merged_long_df)
 
 
 if __name__ == "__main__":
