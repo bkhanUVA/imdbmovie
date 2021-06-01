@@ -84,6 +84,7 @@ def _import_join_data(env: _Env) -> pd.DataFrame:
 def _drop_low_viewed_movies(merged_df: pd.DataFrame) -> pd.DataFrame:
     """Drop movies with few views to reduce noise / recommendations of
     unavailable / home movies"""
+    # Also drop low runtime (sub 5 min)?
     print(f"Dropping movies with less than {_VOTES_CUTOFF} views")
     merged_filtered_df = \
         merged_df.loc[
