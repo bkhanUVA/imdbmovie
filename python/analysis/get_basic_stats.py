@@ -80,10 +80,10 @@ def _calculate_average_rating_total(imdb_wide_df: pd.DataFrame):
 
 
 # Create object to represent nested dict....
-def _generate_statistics(imdb_long_df: pd.DataFrame, imdb_wide_df: pd.DataFrame) -> Dict[str, Union[str, Dict[str, int]]]:
+def _generate_statistics(type: str, imdb_long_df: pd.DataFrame, imdb_wide_df: pd.DataFrame) -> Dict[str, Union[str, Dict[str, int]]]:
     stats_dict = {
-        'average_rating_genre': _calculate_average_rating_by_genre(imdb_long_df),
-        'average_rating_total': _calculate_average_rating_total(imdb_wide_df)
+        f"{type}_average_rating_genre": _calculate_average_rating_by_genre(imdb_long_df),
+        f"{type}_average_rating_total": _calculate_average_rating_total(imdb_wide_df)
     }
     return stats_dict
 
@@ -99,7 +99,20 @@ def output_json(out_path: str, out_filename: str, stats_dict: Dict[str, Union[st
 def main():
     env = _read_args(sys.argv[1:])
     imdb_long_df, imdb_wide_df = _import_cleaned_ratings_data(env)
-    stats_dict = _generate_statistics(imdb_long_df, imdb_wide_df)
+    imdb_stats_dict = _generate_statistics('imdb', imdb_long_df, imdb_wide_df)
+    # Just re-use imdb dfs for now so we can test plotting service
+    user_stats_dict = _generate_statistics('user', imdb_long_df, imdb_wide_df)
+    # TEMP - minus 1 from user scores since we're currently reusing imdb sample
+    #  to build user average as well. This will allow for easier testing of plots
+    for k in user_stats_dict:
+        if k == 'user_average_rating_genre':
+            for k2 in user_stats_dict[k]:
+                user_stats_dict[k][k2] = user_stats_dict[k][k2] - 1
+        else:
+            user_stats_dict[k] = user_stats_dict[k] - 1
+    imdb_stats_dict.update(user_stats_dict)
+    print(imdb_stats_dict)
+    stats_dict = imdb_stats_dict
     output_json(env.outPath, 'full_imdb_stats', stats_dict)
 
 if __name__ == "__main__":
